@@ -1,2 +1,2 @@
-alter table disaster_events
-add column if not exists severity text;
+-- Flood support already exists in the normalized schema and in the shared
+-- severity trigger. Use backend/sql/01_normalized_schema.sql instead.

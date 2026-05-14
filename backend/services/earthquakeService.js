@@ -1,5 +1,5 @@
 import axios from "axios";
-import { isSupabaseConfigured, supabase } from "../config/supabase.js";
+import { listEvents, upsertNormalizedEvents } from "./eventStore.js";
 
 const USGS_ALL_DAY_URL = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson";
 
@@ -9,7 +9,7 @@ export const cleanEarthquakeFeature = (feature) => {
 
   return {
     event_id: feature.id,
-    type: properties.type || "earthquake",
+    eventType: properties.type || "earthquake",
     magnitude: Number(properties.mag),
     place: properties.place || "Unknown location",
     latitude: Number(latitude),
@@ -39,24 +39,7 @@ export const fetchAndCleanEarthquakes = async () => {
 };
 
 export const upsertEarthquakes = async (events) => {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY in backend/.env.");
-  }
-
-  if (!events.length) {
-    return { upserted: 0, events: [] };
-  }
-
-  const { data, error } = await supabase
-    .from("disaster_events")
-    .upsert(events, { onConflict: "event_id" })
-    .select();
-
-  if (error) {
-    throw new Error(`Supabase upsert failed: ${error.message}`);
-  }
-
-  return { upserted: data?.length || events.length, events: data || [] };
+  return upsertNormalizedEvents(events, "external");
 };
 
 export const syncEarthquakes = async () => {
@@ -65,48 +48,9 @@ export const syncEarthquakes = async () => {
 };
 
 export const getAllEvents = async ({ type } = {}) => {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY in backend/.env.");
-  }
-
-  let query = supabase
-    .from("disaster_events")
-    .select("*")
-    .order("event_time", { ascending: false });
-
-  if (type && type !== "all") query = query.eq("type", type);
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw new Error(`Failed to fetch events: ${error.message}`);
-  }
-
-  return data || [];
+  return listEvents({ type });
 };
 
-export const getFilteredEvents = async ({ type, startDate, endDate, minMagnitude, maxMagnitude, search }) => {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY in backend/.env.");
-  }
-
-  let query = supabase
-    .from("disaster_events")
-    .select("*")
-    .order("event_time", { ascending: false });
-
-  if (type && type !== "all") query = query.eq("type", type);
-  if (startDate) query = query.gte("event_time", startDate);
-  if (endDate) query = query.lte("event_time", endDate);
-  if (minMagnitude) query = query.gte("magnitude", Number(minMagnitude));
-  if (maxMagnitude) query = query.lte("magnitude", Number(maxMagnitude));
-  if (search) query = query.ilike("place", `%${search}%`);
-
-  const { data, error } = await query;
-
-  if (error) {
-    throw new Error(`Failed to filter events: ${error.message}`);
-  }
-
-  return data || [];
+export const getFilteredEvents = async (filters = {}) => {
+  return listEvents(filters);
 };

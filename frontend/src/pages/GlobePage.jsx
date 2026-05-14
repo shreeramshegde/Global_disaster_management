@@ -5,27 +5,36 @@ import GlobeLegend from "../components/GlobeLegend";
 import GlobeView from "../components/GlobeView";
 import { Button } from "../components/ui/button";
 import { Select } from "../components/ui/select";
+import { subscribeToEventUpdates } from "../lib/adminSession";
 import { fetchEvents } from "../services/api";
 import { eventTypeLabel } from "../lib/utils";
 
 export default function GlobePage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const initialType = searchParams.get("type") || "all";
+  const initialSourceType = searchParams.get("sourceType") || "all";
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [eventType, setEventType] = useState(initialType);
+  const [sourceType, setSourceType] = useState(initialSourceType);
 
-  const loadEvents = async (type = eventType) => {
+  const loadEvents = async (type = eventType, source = sourceType) => {
     setLoading(true);
-    const result = await fetchEvents({ type });
+    const result = await fetchEvents({ type, sourceType: source });
     setEvents(result.events);
     setLoading(false);
   };
 
   useEffect(() => {
-    setSearchParams({ type: eventType });
-    loadEvents(eventType);
-  }, [eventType]);
+    setSearchParams({ type: eventType, sourceType });
+    loadEvents(eventType, sourceType);
+  }, [eventType, sourceType]);
+
+  useEffect(() => {
+    return subscribeToEventUpdates(() => {
+      loadEvents(eventType, sourceType);
+    });
+  }, [eventType, sourceType]);
 
   return (
     <main className="relative h-screen overflow-hidden bg-black text-white">
@@ -50,6 +59,12 @@ export default function GlobePage() {
               <option value="earthquake">Earthquake</option>
               <option value="wildfire">Wildfire</option>
               <option value="flood">Flood</option>
+              <option value="conflict">Conflict</option>
+            </Select>
+            <Select className="w-36" value={sourceType} onChange={(event) => setSourceType(event.target.value)}>
+              <option value="all">All Sources</option>
+              <option value="manual">Manual Only</option>
+              <option value="external">External Only</option>
             </Select>
             <Button onClick={() => loadEvents()} variant="secondary">
               <RefreshCw size={17} />

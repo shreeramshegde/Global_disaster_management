@@ -14,38 +14,34 @@ export function formatDate(value) {
 }
 
 export function severityForMagnitude(magnitude) {
-  if (magnitude >= 5) return "High";
-  if (magnitude >= 3.5) return "Medium";
+  if (magnitude > 6) return "High";
+  if (magnitude >= 3) return "Medium";
   return "Low";
 }
 
 export function severityForEvent(event) {
-  const value = Number(event?.magnitude);
-
-  if (event?.type === "flood") {
-    const severity = String(event.severity || "").toLowerCase();
-    if (severity === "high" || value > 50) return "High";
-    if (severity === "medium" || value >= 20) return "Medium";
-    return "Low";
+  const explicitSeverity = String(event?.severity || "");
+  if (explicitSeverity === "Low" || explicitSeverity === "Medium" || explicitSeverity === "High") {
+    return explicitSeverity;
   }
 
-  if (event?.type === "wildfire") {
-    if (value >= 350) return "High";
-    if (value >= 320) return "Medium";
-    return "Low";
-  }
-
-  return severityForMagnitude(value);
+  return severityForMagnitude(Number(event?.magnitude));
 }
 
 export function colorForMagnitude(magnitude) {
-  if (magnitude >= 5) return "#ef4444";
-  if (magnitude >= 3.5) return "#f97316";
+  if (magnitude > 6) return "#ef4444";
+  if (magnitude >= 3) return "#f97316";
   return "#fde047";
 }
 
 export function colorForEvent(event) {
   const severity = severityForEvent(event);
+
+  if (event?.type === "conflict") {
+    if (severity === "High") return "#b91c1c";
+    if (severity === "Medium") return "#dc2626";
+    return "#f87171";
+  }
 
   if (event?.type === "wildfire") {
     if (severity === "High") return "#fb923c";
@@ -67,6 +63,7 @@ export function colorForEvent(event) {
 export function metricLabelForType(type) {
   if (type === "wildfire") return "Brightness";
   if (type === "flood") return "Rainfall";
+  if (type === "conflict") return "Fatalities";
   if (type === "all") return "Value";
   return "Magnitude";
 }
@@ -74,6 +71,11 @@ export function metricLabelForType(type) {
 export function eventTypeLabel(type) {
   if (type === "wildfire") return "Wildfire";
   if (type === "flood") return "Flood";
+  if (type === "conflict") return "Conflict";
   if (type === "earthquake") return "Earthquake";
   return "All Events";
+}
+
+export function sourceBadgeLabel(sourceType) {
+  return sourceType === "manual" ? "manual" : "external";
 }

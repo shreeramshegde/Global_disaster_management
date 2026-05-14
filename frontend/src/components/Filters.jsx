@@ -8,12 +8,24 @@ export default function Filters({ filters, onChange, onApply }) {
 
   return (
     <section className="border-y border-white/10 bg-slate-950/70 px-4 py-4 backdrop-blur">
-      <div className="mx-auto grid max-w-7xl gap-3 md:grid-cols-7">
+      <div className="mx-auto grid max-w-7xl gap-3 md:grid-cols-4 xl:grid-cols-8">
         <Select value={filters.type} onChange={(event) => update("type", event.target.value)}>
           <option value="all">All Events</option>
           <option value="earthquake">Earthquake</option>
           <option value="wildfire">Wildfire</option>
           <option value="flood">Flood</option>
+          <option value="conflict">Conflict</option>
+        </Select>
+        <Select value={filters.severity} onChange={(event) => update("severity", event.target.value)}>
+          <option value="">All Severity</option>
+          <option value="Low">Low</option>
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+        </Select>
+        <Select value={filters.sourceType} onChange={(event) => update("sourceType", event.target.value)}>
+          <option value="all">All Sources</option>
+          <option value="manual">Manual Only</option>
+          <option value="external">External Only</option>
         </Select>
         <Input type="date" value={filters.startDate} onChange={(event) => update("startDate", event.target.value)} />
         <Input type="date" value={filters.endDate} onChange={(event) => update("endDate", event.target.value)} />

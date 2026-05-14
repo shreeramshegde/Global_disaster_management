@@ -1,20 +1,4 @@
-alter table disaster_events enable row level security;
-
-create policy "Allow public read disaster events"
-on disaster_events
-for select
-to anon
-using (true);
-
-create policy "Allow public insert disaster events"
-on disaster_events
-for insert
-to anon
-with check (true);
-
-create policy "Allow public update disaster events"
-on disaster_events
-for update
-to anon
-using (true)
-with check (true);
+-- Compatibility entry point.
+-- Run backend/sql/02_rls_policies.sql in the Supabase SQL Editor if you use the anon key.
+-- The admin_users table is intentionally denied for anon access; use the backend
+-- with SUPABASE_SERVICE_ROLE_KEY for admin authentication queries.

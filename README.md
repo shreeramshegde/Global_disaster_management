@@ -1,115 +1,247 @@
-# Base1 - Disaster Management System (Earthquake Monitoring)
+# GLOBAL DISASTER MANAGEMENT SYSTEM
 
-Base1 is a DBMS-based full-stack web application for real-time earthquake monitoring. The backend fetches earthquake events from the USGS API, cleans the data, stores processed rows in Supabase PostgreSQL, and exposes APIs for the React dashboard. The frontend displays earthquake records with filters, charts, insights, and a 3D globe visualization.
+GLOBAL DISASTER MANAGEMENT SYSTEM is a full-stack DBMS project for monitoring earthquakes, wildfires, floods, and conflict events. The project now includes admin authentication, 5+ normalized tables, protected manual CRUD, PostgreSQL trigger automation, and safer backend validation without breaking external read-only ingestion.
 
-## Tech Stack
+## Final Architecture
 
-Frontend:
-- React with Vite
-- Tailwind CSS
-- shadcn/ui-style local UI components
-- Recharts
-- Globe.gl
-- Lucide React icons
+The normalized database now centers around these tables:
 
-Backend:
-- Node.js
-- Express.js
-- Axios
-- csv-parser
-- node-cron
+1. `event_types`
+2. `locations`
+3. `disaster_events`
+4. existing external/support tables already present in your Supabase project
+5. `admin_users`
 
-Database:
-- Supabase PostgreSQL
+### Why normalization was used
 
-## Database Schema
+- `event_types` removes repeated disaster type strings from every event row.
+- `locations` removes repeated place/coordinate combinations.
+- `disaster_events` stores the actual event facts and references normalized lookup tables.
+- `admin_users` isolates authentication data from disaster records.
+- This reduces duplication, improves consistency, and makes updates safer.
 
-Run this SQL in the Supabase SQL editor:
+## Admin Authentication Flow
 
-```sql
-create table disaster_events (
-id uuid primary key default gen_random_uuid(),
-event_id text unique,
-type text,
-magnitude float,
-place text,
-latitude float,
-longitude float,
-event_time timestamp,
-created_at timestamp default now()
-);
-```
+Admin authentication is only for Admin Mode.
 
-The same SQL is also available in `backend/schema.sql`.
+### Backend auth stack
 
-If Row Level Security is enabled, also run the policy SQL from `backend/rls-policies.sql`. Without these policies, the backend will read successfully but inserts/upserts will fail with:
+- `bcryptjs` hashes passwords before storage.
+- `jsonwebtoken` creates signed JWT tokens.
+- `backend/middleware/authMiddleware.js` protects write endpoints.
 
-```text
-new row violates row-level security policy for table "disaster_events"
-```
+### Endpoints
 
-## Setup Instructions
+- `POST /admin/register`
+  Creates an admin user in `admin_users`, hashes the password, and returns a JWT.
+- `POST /admin/login`
+  Validates username/email plus password and returns a JWT.
 
-### Backend Setup
+### Protected routes
 
-```bash
-cd backend
-npm install
-```
+These now require `Authorization: Bearer <token>`:
 
-Create or update `backend/.env`:
+- `POST /events`
+- `PUT /events/:id`
+- `DELETE /events/:id`
+
+### Frontend auth flow
+
+- Admin opens `/admin/login`
+- Admin registers or logs in
+- JWT is stored in localStorage
+- Dashboard unlocks Admin Mode and shows the admin badge
+- Protected CRUD requests include the JWT automatically
+
+## CRUD Restrictions
+
+Only manual rows are editable.
+
+- `source_type = 'manual'`
+  Create, update, and soft delete allowed for authenticated admins
+- `source_type = 'external'`
+  Read-only, cannot be updated, cannot be hard deleted
+
+This is enforced in two places:
+
+- backend service validation
+- PostgreSQL delete-protection trigger
+
+## Trigger Explanation
+
+The database now has three triggers in `backend/sql/01_normalized_schema.sql`.
+
+### 1. `updated_at` trigger
+
+- Automatically updates `updated_at` whenever a disaster row changes
+- Keeps timestamps consistent even if rows are edited outside the Express API
+
+### 2. Severity automation trigger
+
+- Runs on `INSERT` and `UPDATE`
+- Automatically sets severity from magnitude:
+  - `< 3` -> `Low`
+  - `3 to 6` -> `Medium`
+  - `> 6` -> `High`
+- Prevents drift between frontend, backend scripts, and direct SQL edits
+
+### 3. External delete protection trigger
+
+- Rejects hard deletes for `source_type = 'external'`
+- Protects imported third-party data at the database level
+
+## Soft Delete Design
+
+Manual delete is implemented as a soft delete:
+
+- row is kept in the table
+- `is_deleted = true`
+- normal reads exclude deleted rows
+
+Why soft delete is used:
+
+- preserves auditability
+- avoids accidental data loss
+- keeps external and manual history safer
+
+## SQL Files You Should Run In Supabase
+
+Run these in the Supabase SQL Editor in this order.
+
+### 1. Main schema
+
+File: `backend/sql/01_normalized_schema.sql`
+
+This creates:
+
+- `event_types`
+- `locations`
+- `disaster_events`
+- `admin_users`
+- indexes
+- `updated_at` trigger
+- severity automation trigger
+- external delete protection trigger
+
+### 2. RLS policies
+
+File: `backend/sql/02_rls_policies.sql`
+
+Use this if your backend is not using the service role key.  
+Important: `admin_users` is denied for `anon` access by design.
+
+### 3. Dummy manual seed
+
+File: `backend/sql/03_seed_dummy_manual_events.sql`
+
+This inserts sample manual rows for testing admin CRUD.
+
+### 4. Optional conflict import
+
+File: `backend/sql/acled_conflict_events.sql`
+
+This inserts external conflict rows.
+
+### Compatibility files
+
+These were also updated so your project docs stay aligned:
+
+- `backend/schema.sql`
+- `backend/rls-policies.sql`
+- `backend/add_flood_column.sql`
+
+## What You Must Add In Supabase
+
+In Supabase, do these exact steps:
+
+1. Create a project.
+2. Open `Settings -> API`.
+3. Copy:
+   - `Project URL`
+   - `anon public key`
+   - `service_role key`
+4. Open `SQL Editor`.
+5. Run `backend/sql/01_normalized_schema.sql`.
+6. If you are using anon-key-based backend access, also run `backend/sql/02_rls_policies.sql`.
+7. Optionally run:
+   - `backend/sql/03_seed_dummy_manual_events.sql`
+   - `backend/sql/acled_conflict_events.sql`
+
+### Important Supabase requirement
+
+For admin authentication, you should use:
+
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+Why:
+
+- the backend must securely read and insert `admin_users`
+- `admin_users` is intentionally blocked from public anon access
+- password hashes should never be exposed through public policies
+
+## Environment Variables
+
+Create `backend/.env`:
 
 ```env
-SUPABASE_URL=your_url_here
-SUPABASE_ANON_KEY=your_key_here
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
+SUPABASE_ANON_KEY=your_anon_key
+ADMIN_JWT_SECRET=replace_with_a_long_random_secret
 PORT=5001
 NASA_FIRMS_MAP_KEY=your_firms_map_key_here
 OPENWEATHER_API_KEY=your_openweather_key_here
 ```
 
-Do not hardcode Supabase credentials in source files.
+Create `frontend/.env`:
 
-### How To Get Supabase Keys
+```env
+VITE_API_BASE_URL=http://localhost:5001
+```
 
-1. Go to your Supabase dashboard.
-2. Open your project.
-3. Go to Settings -> API.
-4. Copy:
-   - Project URL
-   - anon public key
-5. Paste them into `backend/.env`.
+## Backend Changes Included
 
-### Run Backend
+- Added `backend/routes/admin.js`
+- Added `backend/services/adminAuthService.js`
+- Added `backend/middleware/authMiddleware.js`
+- Protected event write routes with JWT middleware
+- Fixed manual event update flow in `backend/services/eventStore.js`
+- Removed manual `updated_at` handling from app code so DB trigger stays authoritative
+- Aligned validation and severity derivation with trigger rules
+
+## Frontend Changes Included
+
+- Added `frontend/src/pages/AdminLogin.jsx`
+- Added local admin session storage
+- Added JWT-based authenticated write requests
+- Admin Mode only appears after login
+- Added admin badge
+- Added edit modal
+- Added delete confirmation dialog
+- Fixed edit form state handling
+- Refreshes table, charts, and open globe views after CRUD
+
+## Update/Edit Fix Summary
+
+The broken edit flow was fixed by:
+
+- validating event existence before update
+- blocking updates unless `source_type = 'manual'`
+- properly updating location, magnitude, severity, and event time
+- using controlled React form state instead of fragile default-value remounting
+- reloading event data after save so charts and table reflect changes immediately
+
+## Install And Run
+
+### Backend
 
 ```bash
 cd backend
+npm install
 npm run dev
 ```
 
-When the backend starts, it automatically fetches earthquake data from:
-
-```text
-https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson
-```
-
-It also refreshes the pipeline every 10 minutes.
-
-Wildfire support uses NASA FIRMS. Create a FIRMS map key from the NASA FIRMS site and add it to `NASA_FIRMS_MAP_KEY`. If this key is missing, earthquake sync still works and wildfire sync is skipped with a clear message.
-
-Flood support uses OpenWeather forecast data. Add `OPENWEATHER_API_KEY` from OpenWeather. The app estimates flood risk from rainfall, humidity, and continuous rain windows.
-
-### Flood Column Migration
-
-Flood records store the calculated OpenWeather rainfall risk as severity text. Run this once in the Supabase SQL editor:
-
-```sql
-alter table disaster_events
-add column if not exists severity text;
-```
-
-The same SQL is available in `backend/add_flood_column.sql`.
-
-### Frontend Setup
+### Frontend
 
 ```bash
 cd frontend
@@ -117,129 +249,21 @@ npm install
 npm run dev
 ```
 
-The frontend runs at:
+## Verification Checklist
 
-```text
-http://localhost:5173
-```
+- Admin can register and login
+- JWT is returned and stored
+- Admin Mode appears only after login
+- Manual events can be created
+- Manual events can be edited
+- Manual events can be soft deleted
+- External events stay read-only
+- `updated_at` changes automatically on update
+- severity is assigned automatically by trigger
+- hard delete on external rows is rejected by PostgreSQL
 
-The backend API is expected at:
+## Notes
 
-```text
-http://localhost:5001
-```
-
-To use a different backend URL, create `frontend/.env`:
-
-```env
-VITE_API_BASE_URL=http://localhost:5001
-```
-
-## Backend API Endpoints
-
-### `GET /events`
-
-Returns all stored disaster events ordered by newest event time. You can filter by type:
-
-```bash
-curl "http://localhost:5001/events?type=earthquake"
-curl "http://localhost:5001/events?type=wildfire"
-curl "http://localhost:5001/events?type=flood"
-```
-
-### `GET /events/filter`
-
-Filters events by query parameters:
-
-```text
-type=earthquake
-startDate=2026-04-20
-endDate=2026-04-21
-minMagnitude=2.5
-maxMagnitude=6
-search=Alaska
-```
-
-Example:
-
-```bash
-curl "http://localhost:5001/events/filter?type=earthquake&minMagnitude=3.5"
-```
-
-### `GET /events/sync` or `POST /events/sync`
-
-Manually triggers the USGS pipeline and upserts cleaned records into Supabase.
-
-## How Data Pipeline Works
-
-The app implements Method 2: Automatic API Pipeline.
-
-```text
-USGS API -> Backend fetch -> Clean and filter -> Supabase upsert -> Frontend API fetch -> Dashboard and globe
-```
-
-Pipeline details:
-
-1. Backend fetches the USGS all-day GeoJSON feed, NASA FIRMS wildfire CSV data, and OpenWeather forecast data.
-2. It filters only earthquake events with `magnitude > 2.5`; wildfire brightness and flood rainfall amount are stored in the shared `magnitude` column.
-3. It transforms each source record into the database shape:
-   - `event_id`
-   - `type`
-   - `magnitude`
-   - `place`
-   - `latitude`
-   - `longitude`
-   - `event_time`
-4. It upserts into Supabase using `event_id` as the unique key.
-5. The frontend reads processed records from the backend.
-
-## Important Notes
-
-- Earthquake, wildfire, and flood data are automatically fetched when the backend starts.
-- A cron job fetches fresh data every 10 minutes.
-- No manual JSON upload is needed.
-- Raw USGS JSON is not stored directly.
-- Supabase stores cleaned, processed earthquake rows.
-- The frontend shows sample fallback data if the backend is unavailable, so the UI can still be previewed before credentials are configured.
-
-## Project Structure
-
-```text
-backend/
-├── config/
-│   └── supabase.js
-├── index.js
-├── routes/
-│   └── events.js
-├── schema.sql
-├── scripts/
-│   └── fetchEarthquakes.js
-├── services/
-│   └── earthquakeService.js
-└── .env
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── lib/
-│   ├── pages/
-│   ├── services/
-│   ├── App.jsx
-│   ├── main.jsx
-│   └── styles.css
-└── index.html
-```
-
-## Final Goal
-
-When the app runs:
-
-1. Backend fetches and stores earthquake data from USGS.
-2. Supabase contains cleaned rows in `disaster_events`.
-3. Frontend displays:
-   - Events table
-   - Event type switching
-   - Events over time chart
-   - Severity pie chart
-   - Insights section
-   - 3D disaster globe with earthquake and wildfire legend
+- Frontend production build passes.
+- Backend syntax check passes for the new auth and route modules.
+- Vite still reports a large bundle-size warning, but the build succeeds.

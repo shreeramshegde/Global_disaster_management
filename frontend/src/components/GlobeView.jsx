@@ -13,6 +13,22 @@ export default function GlobeView({ events = [], interactive = true, variant = "
     [events]
   );
 
+  const pointRadiusForEvent = (event) => {
+    const value = Number(event.magnitude);
+    if (event.type === "flood") return Math.max(0.22, Math.min(0.85, value / 70));
+    if (event.type === "wildfire") return Math.max(0.2, Math.min(0.8, value / 520));
+    if (event.type === "conflict") return Math.max(0.24, Math.min(1.15, 0.26 + value / 32));
+    return Math.max(0.18, value * 0.085);
+  };
+
+  const ringRadiusForEvent = (event) => {
+    const value = Number(event.magnitude);
+    if (event.type === "flood") return Math.max(1.4, Math.min(4.5, value / 12));
+    if (event.type === "wildfire") return Math.max(1.3, Math.min(4, value / 110));
+    if (event.type === "conflict") return Math.max(1.5, Math.min(5.2, 1.4 + value / 8));
+    return Math.max(1.4, value * 0.8);
+  };
+
   useEffect(() => {
     if (!containerRef.current) return undefined;
 
@@ -28,12 +44,8 @@ export default function GlobeView({ events = [], interactive = true, variant = "
       .pointsData(safeEvents)
       .pointLat((d) => d.latitude)
       .pointLng((d) => d.longitude)
-      .pointAltitude(0.004)
-      .pointRadius((d) => {
-        const value = Number(d.magnitude);
-        if (d.type === "flood") return Math.max(0.22, Math.min(0.85, value / 70));
-        return d.type === "wildfire" ? Math.max(0.2, Math.min(0.8, value / 520)) : Math.max(0.18, value * 0.085);
-      })
+      .pointAltitude((d) => (d.type === "conflict" ? 0.0015 : 0.004))
+      .pointRadius((d) => pointRadiusForEvent(d))
       .pointColor((d) => colorForEvent(d))
       .pointLabel((d) => `
         <div class="globe-tooltip">
@@ -47,12 +59,9 @@ export default function GlobeView({ events = [], interactive = true, variant = "
       .ringLat((d) => d.latitude)
       .ringLng((d) => d.longitude)
       .ringColor((d) => colorForEvent(d))
-      .ringMaxRadius((d) => {
-        if (d.type === "flood") return Math.max(1.4, Math.min(4.5, Number(d.magnitude) / 12));
-        return d.type === "wildfire" ? Math.max(1.3, Math.min(4, Number(d.magnitude) / 110)) : Math.max(1.4, Number(d.magnitude) * 0.8);
-      })
-      .ringPropagationSpeed(1.2)
-      .ringRepeatPeriod(1800)
+      .ringMaxRadius((d) => ringRadiusForEvent(d))
+      .ringPropagationSpeed((d) => (d.type === "conflict" ? 1.45 : 1.2))
+      .ringRepeatPeriod((d) => (d.type === "conflict" ? 1200 : 1800))
       .enablePointerInteraction(interactive);
 
     globe.controls().autoRotate = true;

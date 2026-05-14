@@ -1,10 +1,7 @@
 import { severityForEvent } from "./utils";
 
 export function getSeverityData(events) {
-  const floodOnly = events.length > 0 && events.every((event) => event.type === "flood");
-  const order = floodOnly
-    ? ["Low", "Medium", "High"]
-    : ["Low", "Medium", "High"];
+  const order = ["Low", "Medium", "High"];
   const counts = events.reduce((acc, event) => {
     const severity = severityForEvent(event);
     acc[severity] = (acc[severity] || 0) + 1;
@@ -15,6 +12,7 @@ export function getSeverityData(events) {
 }
 
 export function getDailyTrendData(events) {
+  const conflictOnly = events.length > 0 && events.every((event) => event.type === "conflict");
   const grouped = events.reduce((acc, event) => {
     const date = new Date(event.event_time).toISOString().slice(0, 10);
     acc[date] = acc[date] || { date, events: 0, magnitudeTotal: 0 };
@@ -28,7 +26,9 @@ export function getDailyTrendData(events) {
     .map((item) => ({
       date: new Date(item.date).toLocaleDateString("en", { month: "short", day: "numeric" }),
       events: item.events,
-      avgMagnitude: Number((item.magnitudeTotal / item.events).toFixed(2))
+      avgMagnitude: Number((item.magnitudeTotal / item.events).toFixed(2)),
+      magnitudeTotal: Number(item.magnitudeTotal.toFixed(2)),
+      value: conflictOnly ? Number(item.magnitudeTotal.toFixed(2)) : item.events
     }));
 }
 
@@ -67,20 +67,33 @@ export function getAutoInsight(events) {
   const trend = getTrendSummary(events);
   const hasOnlyWildfires = events.every((event) => event.type === "wildfire");
   const hasOnlyFloods = events.every((event) => event.type === "flood");
-  const subject = hasOnlyWildfires ? "Wildfire activity" : hasOnlyFloods ? "Flood risk" : "Disaster activity";
+  const hasOnlyConflicts = events.every((event) => event.type === "conflict");
+  const subject = hasOnlyWildfires
+    ? "Wildfire activity"
+    : hasOnlyFloods
+      ? "Flood risk"
+      : hasOnlyConflicts
+        ? "Conflict activity"
+        : "Disaster activity";
 
   if (trend.direction === "increase") {
     if (hasOnlyFloods) return `Increasing rainfall trend observed, with most forecast windows at ${dominantSeverity.toLowerCase()} flood risk.`;
+    if (hasOnlyConflicts) return `Conflict activity is increasing in the selected range, with ${dominantSeverity.toLowerCase()} fatality incidents occurring most often.`;
     return `${subject} is increasing in the recent period, and most events are ${dominantSeverity.toLowerCase()} severity.`;
   }
 
   if (trend.direction === "decrease") {
     if (hasOnlyFloods) return `Rainfall risk is decreasing in the forecast period, with ${dominantSeverity.toLowerCase()} risk appearing most often.`;
+    if (hasOnlyConflicts) return `Conflict activity is easing compared to the previous period, while ${dominantSeverity.toLowerCase()} fatality incidents remain the most common.`;
     return `${subject} is decreasing in the recent period, with ${dominantSeverity.toLowerCase()} severity events appearing most often.`;
   }
 
   if (hasOnlyFloods && dominantSeverity === "High") {
     return "High rainfall detected, flood risk should be monitored closely.";
+  }
+
+  if (hasOnlyConflicts && dominantSeverity === "High") {
+    return "High intensity conflict events are present in the selected range and should be monitored closely.";
   }
 
   return `${subject} is stable for the selected range, and most events are ${dominantSeverity.toLowerCase()} severity.`;

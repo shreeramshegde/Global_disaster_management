@@ -1,7 +1,7 @@
 import axios from "axios";
-import { isSupabaseConfigured, supabase } from "../config/supabase.js";
+import { upsertNormalizedEvents } from "./eventStore.js";
 
-const OPENWEATHER_FORECAST_URL = "https://api.openweathermap.org/data/2.5/forecast";
+const OPENWEATHER_CURRENT_URL = "https://api.openweathermap.org/data/2.5/weather";
 const DEFAULT_FLOOD_LOCATIONS = [
   { name: "Mumbai", lat: 19.076, lon: 72.8777 },
   { name: "Chennai", lat: 13.0827, lon: 80.2707 },
@@ -22,7 +22,7 @@ const getFloodLocations = () => {
     .filter((location) => location.name && Number.isFinite(location.lat) && Number.isFinite(location.lon));
 };
 
-const rainAmount = (forecast) => Number(forecast.rain?.["3h"] || forecast.rain?.["1h"] || 0);
+const rainAmount = (weather) => Number(weather.rain?.["1h"] || weather.rain?.["3h"] || 0);
 
 const getSeverity = (rainfall, humidity, continuousRainWindows) => {
   if (rainfall > 50 || (rainfall >= 35 && humidity >= 85) || continuousRainWindows >= 4) return "High";
@@ -30,18 +30,18 @@ const getSeverity = (rainfall, humidity, continuousRainWindows) => {
   return "Low";
 };
 
-const cleanForecastItem = (forecast, location, continuousRainWindows) => {
-  const rainfall = rainAmount(forecast);
-  const humidity = Number(forecast.main?.humidity || 0);
-  const severity = getSeverity(rainfall, humidity, continuousRainWindows);
-  const time = forecast.dt_txt ? new Date(`${forecast.dt_txt}Z`) : new Date(Number(forecast.dt) * 1000);
+const cleanWeatherItem = (weather, location) => {
+  const rainfall = rainAmount(weather);
+  const humidity = Number(weather.main?.humidity || 0);
+  const severity = getSeverity(rainfall, humidity, rainfall > 0 ? 1 : 0);
+  const time = weather.dt ? new Date(Number(weather.dt) * 1000) : new Date();
   const roundedLat = location.lat.toFixed(3);
   const roundedLon = location.lon.toFixed(3);
   const compactTime = time.toISOString().replace(/[-:]/g, "").slice(0, 13);
 
   return {
     event_id: `flood-${location.name.toLowerCase().replace(/\s+/g, "-")}-${roundedLat}-${roundedLon}-${compactTime}`,
-    type: "flood",
+    eventType: "flood",
     magnitude: Number(rainfall.toFixed(2)),
     severity,
     place: location.name,
@@ -51,8 +51,8 @@ const cleanForecastItem = (forecast, location, continuousRainWindows) => {
   };
 };
 
-const fetchForecastForLocation = async (location, apiKey) => {
-  const { data } = await axios.get(OPENWEATHER_FORECAST_URL, {
+const fetchCurrentWeatherForLocation = async (location, apiKey) => {
+  const { data } = await axios.get(OPENWEATHER_CURRENT_URL, {
     params: {
       lat: location.lat,
       lon: location.lon,
@@ -62,20 +62,13 @@ const fetchForecastForLocation = async (location, apiKey) => {
     timeout: 20000
   });
 
-  if (!Array.isArray(data?.list)) {
-    throw new Error(`OpenWeather forecast response was invalid for ${location.name}.`);
+  if (!data || !data.main || !data.coord) {
+    throw new Error(`OpenWeather current weather response was invalid for ${location.name}.`);
   }
 
-  const cityName = data.city?.name || location.name;
-  let continuousRainWindows = 0;
-
-  return data.list
-    .map((forecast) => {
-      const rainfall = rainAmount(forecast);
-      continuousRainWindows = rainfall > 0 ? continuousRainWindows + 1 : 0;
-      return cleanForecastItem(forecast, { ...location, name: cityName }, continuousRainWindows);
-    })
-    .filter((event) => event.magnitude > 0 || event.severity !== "Low");
+  const cityName = data.name || location.name;
+  const event = cleanWeatherItem(data, { ...location, name: cityName });
+  return event.magnitude > 0 || event.severity !== "Low" ? [event] : [];
 };
 
 export const fetchAndCleanFloods = async () => {
@@ -86,7 +79,7 @@ export const fetchAndCleanFloods = async () => {
   }
 
   const settled = await Promise.allSettled(
-    getFloodLocations().map((location) => fetchForecastForLocation(location, apiKey))
+    getFloodLocations().map((location) => fetchCurrentWeatherForLocation(location, apiKey))
   );
 
   const errors = settled
@@ -112,24 +105,7 @@ export const fetchAndCleanFloods = async () => {
 };
 
 export const upsertFloods = async (events) => {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY in backend/.env.");
-  }
-
-  if (!events.length) {
-    return { upserted: 0, events: [] };
-  }
-
-  const { data, error } = await supabase
-    .from("disaster_events")
-    .upsert(events, { onConflict: "event_id" })
-    .select();
-
-  if (error) {
-    throw new Error(`Supabase flood upsert failed: ${error.message}`);
-  }
-
-  return { upserted: data?.length || events.length, events: data || [] };
+  return upsertNormalizedEvents(events, "external");
 };
 
 export const syncFloods = async () => {

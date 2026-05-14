@@ -9,15 +9,19 @@
     "start": "node index.js",
     "fetch:events": "node scripts/fetchEarthquakes.js",
     "fetch:wildfires": "node scripts/fetchWildfires.js",
-    "fetch:floods": "node scripts/fetchFloods.js"
+    "fetch:floods": "node scripts/fetchFloods.js",
+    "generate:conflicts": "node scripts/generateConflictSql.js",
+    "seed:dummy": "node scripts/seedDummyData.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
     "axios": "^1.8.4",
+    "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "csv-parser": "^3.2.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
     "node-cron": "^3.0.3"
   },
   "devDependencies": {

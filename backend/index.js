@@ -2,6 +2,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import express from "express";
 import cron from "node-cron";
+import adminRouter from "./routes/admin.js";
 import eventsRouter from "./routes/events.js";
 import { syncEarthquakes } from "./services/earthquakeService.js";
 import { syncFloods } from "./services/fetchFloods.js";
@@ -17,12 +18,22 @@ app.use(express.json());
 
 app.get("/", (_req, res) => {
   res.json({
-    app: "Base1 - Disaster Management System",
+    app: "GLOBAL DISASTER MANAGEMENT SYSTEM",
     status: "running",
-    endpoints: ["/events", "/events?type=earthquake", "/events?type=wildfire", "/events?type=flood", "/events/filter", "/events/sync"]
+    endpoints: [
+      "/events",
+      "/events?type=earthquake",
+      "/events?sourceType=manual",
+      "/events/meta",
+      "/events/filter",
+      "/events/sync",
+      "/admin/register",
+      "/admin/login"
+    ]
   });
 });
 
+app.use("/admin", adminRouter);
 app.use("/events", eventsRouter);
 
 cron.schedule("*/10 * * * *", async () => {

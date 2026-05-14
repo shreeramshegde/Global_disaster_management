@@ -38,17 +38,27 @@ export default function Charts({ events, selectedType = "all" }) {
   const trendData = getDailyTrendData(events);
   const severityData = getSeverityData(events);
   const severityTotal = severityData.reduce((sum, item) => sum + item.value, 0);
+  const isConflict = selectedType === "conflict" && events.every((event) => event.type === "conflict");
+  const areaTitle = isConflict ? "Conflict Fatalities Area Graph" : `${eventTypeLabel(selectedType)} Activity Area Graph`;
+  const areaDataKey = isConflict ? "value" : "events";
+  const areaName = isConflict ? "Fatalities" : "Events";
+  const areaValueSuffix = isConflict ? "fatalities" : "events";
+  const gradientTop = isConflict ? "#ef4444" : "#22d3ee";
+  const gradientMid = isConflict ? "#991b1b" : "#2563eb";
+  const lineColor = isConflict ? "#ef4444" : "#22d3ee";
+  const activeDotColor = isConflict ? "#fca5a5" : "#22d3ee";
+  const cursorColor = isConflict ? "rgba(239,68,68,0.38)" : "rgba(56,189,248,0.38)";
 
   return (
     <div className="grid gap-4 xl:grid-cols-3">
-      <ChartPanel title={`${eventTypeLabel(selectedType)} Activity Area Graph`} className="xl:col-span-2">
+      <ChartPanel title={areaTitle} className="xl:col-span-2">
         <ResponsiveContainer width="100%" height={330}>
           <AreaChart data={trendData} margin={{ top: 18, right: 24, left: 0, bottom: 4 }}>
             <defs>
               <linearGradient id="eventAreaFill" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0%" stopColor="#22d3ee" stopOpacity={0.42} />
-                <stop offset="55%" stopColor="#2563eb" stopOpacity={0.16} />
-                <stop offset="100%" stopColor="#22d3ee" stopOpacity={0} />
+                <stop offset="0%" stopColor={gradientTop} stopOpacity={0.42} />
+                <stop offset="55%" stopColor={gradientMid} stopOpacity={0.16} />
+                <stop offset="100%" stopColor={gradientTop} stopOpacity={0} />
               </linearGradient>
               <filter id="areaLineGlow" x="-20%" y="-20%" width="140%" height="140%">
                 <feGaussianBlur stdDeviation="3" result="blur" />
@@ -62,21 +72,21 @@ export default function Charts({ events, selectedType = "all" }) {
             <XAxis dataKey="date" stroke="#94a3b8" tickLine={false} axisLine={false} />
             <YAxis stroke="#94a3b8" allowDecimals={false} />
             <Tooltip
-              content={<AreaTooltip />}
-              cursor={{ stroke: "rgba(56,189,248,0.38)", strokeWidth: 1 }}
+              content={<AreaTooltip suffix={areaValueSuffix} dataKey={areaDataKey} />}
+              cursor={{ stroke: cursorColor, strokeWidth: 1 }}
               wrapperStyle={{ outline: "none" }}
             />
             <Legend />
             <Area
               type="monotone"
-              dataKey="events"
-              name="Events"
-              stroke="#22d3ee"
+              dataKey={areaDataKey}
+              name={areaName}
+              stroke={lineColor}
               strokeWidth={4}
               fill="url(#eventAreaFill)"
               filter="url(#areaLineGlow)"
-              dot={{ r: 4, fill: "#020617", stroke: "#67e8f9", strokeWidth: 2 }}
-              activeDot={{ r: 8, fill: "#22d3ee", stroke: "#ffffff", strokeWidth: 2 }}
+              dot={{ r: 4, fill: "#020617", stroke: lineColor, strokeWidth: 2 }}
+              activeDot={{ r: 8, fill: activeDotColor, stroke: "#ffffff", strokeWidth: 2 }}
               isAnimationActive
               animationDuration={1200}
               animationEasing="ease-out"
@@ -84,7 +94,7 @@ export default function Charts({ events, selectedType = "all" }) {
           </AreaChart>
         </ResponsiveContainer>
       </ChartPanel>
-      <ChartPanel title="Severity Breakdown">
+      <ChartPanel title={isConflict ? "Fatality Breakdown" : "Severity Breakdown"}>
         <ResponsiveContainer width="100%" height={330}>
           <PieChart>
             <Pie
@@ -117,16 +127,16 @@ export default function Charts({ events, selectedType = "all" }) {
   );
 }
 
-function AreaTooltip({ active, payload, label }) {
+function AreaTooltip({ active, payload, label, suffix = "events", dataKey = "events" }) {
   if (!active || !payload?.length) return null;
 
-  const value = payload.find((item) => item.dataKey === "events")?.value ?? 0;
+  const value = payload.find((item) => item.dataKey === dataKey)?.value ?? 0;
 
   return (
     <div style={tooltipStyle}>
       <p className="text-xs uppercase tracking-[0.2em] text-cyan-200">{label}</p>
       <p className="mt-2 text-sm text-white">
-        Value: <span className="font-bold text-cyan-200">{value}</span> events
+        Value: <span className="font-bold text-cyan-200">{value}</span> {suffix}
       </p>
     </div>
   );
@@ -142,7 +152,7 @@ function PieTooltip({ active, payload, total }) {
 
   return (
     <div style={tooltipStyle}>
-      <p className="text-sm font-semibold text-white">{name} Severity</p>
+      <p className="text-sm font-semibold text-white">{name}</p>
       <p className="mt-1 text-sm text-slate-200">
         {value} events <span className="text-cyan-200">({percentage}%)</span>
       </p>

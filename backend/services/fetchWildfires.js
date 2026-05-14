@@ -1,7 +1,7 @@
 import axios from "axios";
 import csvParser from "csv-parser";
 import { Readable } from "stream";
-import { isSupabaseConfigured, supabase } from "../config/supabase.js";
+import { upsertNormalizedEvents } from "./eventStore.js";
 
 const FIRMS_SOURCE = process.env.NASA_FIRMS_SOURCE || "VIIRS_SNPP_NRT";
 const FIRMS_DAYS = process.env.NASA_FIRMS_DAYS || "1";
@@ -35,7 +35,7 @@ const cleanWildfireRow = (row) => {
 
   return {
     event_id: eventId,
-    type: "wildfire",
+    eventType: "wildfire",
     magnitude: brightness,
     place: row.country || row.country_id || "Unknown",
     latitude,
@@ -69,24 +69,7 @@ export const fetchAndCleanWildfires = async () => {
 };
 
 export const upsertWildfires = async (events) => {
-  if (!isSupabaseConfigured) {
-    throw new Error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_ANON_KEY in backend/.env.");
-  }
-
-  if (!events.length) {
-    return { upserted: 0, events: [] };
-  }
-
-  const { data, error } = await supabase
-    .from("disaster_events")
-    .upsert(events, { onConflict: "event_id" })
-    .select();
-
-  if (error) {
-    throw new Error(`Supabase wildfire upsert failed: ${error.message}`);
-  }
-
-  return { upserted: data?.length || events.length, events: data || [] };
+  return upsertNormalizedEvents(events, "external");
 };
 
 export const syncWildfires = async () => {
