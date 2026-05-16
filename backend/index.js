@@ -8,7 +8,7 @@ import { syncEarthquakes } from "./services/earthquakeService.js";
 import { syncFloods } from "./services/fetchFloods.js";
 import { syncWildfires } from "./services/fetchWildfires.js";
 
-dotenv.config();
+dotenv.config({ path: new URL("./.env", import.meta.url) });
 
 const app = express();
 const PORT = process.env.PORT || 5001;

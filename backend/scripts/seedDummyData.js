@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import { generateDummyEvents } from "../services/dummyEventGenerator.js";
 import { upsertNormalizedEvents } from "../services/eventStore.js";
 
-dotenv.config();
+dotenv.config({ path: new URL("../.env", import.meta.url) });
 
 const requestedCount = Number(process.argv[2]);
 const count = Number.isFinite(requestedCount) && requestedCount >= 50 && requestedCount <= 100

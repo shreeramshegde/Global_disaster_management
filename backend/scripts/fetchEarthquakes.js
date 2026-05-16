@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 import { syncEarthquakes } from "../services/earthquakeService.js";
 
-dotenv.config();
+dotenv.config({ path: new URL("../.env", import.meta.url) });
 
 try {
   const result = await syncEarthquakes();
