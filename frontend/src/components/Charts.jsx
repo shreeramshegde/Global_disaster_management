@@ -13,7 +13,7 @@ import {
   YAxis
 } from "recharts";
 import { useState } from "react";
-import { getDailyTrendData, getSeverityData } from "../lib/analytics";
+import { getDailyTrendData, getSeverityData } from "../lib/stats";
 import { eventTypeLabel } from "../lib/utils";
 
 const severityColors = {

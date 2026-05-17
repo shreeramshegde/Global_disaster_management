@@ -1,5 +1,5 @@
 import { severityForEvent } from "../lib/utils";
-import { getAutoInsight, getTrendSummary } from "../lib/analytics";
+import { getAutoInsight, getTrendSummary } from "../lib/stats";
 import { metricLabelForType } from "../lib/utils";
 
 export default function Insights({ events, selectedType = "all" }) {

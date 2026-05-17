@@ -1,5 +1,5 @@
 import { Activity, TrendingDown, TrendingUp } from "lucide-react";
-import { getAutoInsight, getTrendSummary } from "../lib/analytics";
+import { getAutoInsight, getTrendSummary } from "../lib/stats";
 import { eventTypeLabel } from "../lib/utils";
 
 export default function TrendAnalysis({ events, selectedType = "all" }) {
